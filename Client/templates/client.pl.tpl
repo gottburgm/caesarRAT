@@ -1,4 +1,5 @@
 #!/usr/bin/perl
+# TOCHECK:  perl -e 'open(P, "| kate &"); while(<P>) { print $_; } close P; print "lol\n";' 
 
 use 5.10.0;
 
@@ -124,7 +125,7 @@ sub send_data {
 }
 
 sub execute_command {
-    my $command = @_[0];
+    my $command = $_[0];
     ($_ = qx{$command 2>&1}, $? >> 8);
 }
 
@@ -200,12 +201,16 @@ while(1) {
                 when(/^cd /i) {
                     my $directory = $command;
                     $directory =~ s/cd //gi;
-                    $CWD = $directory or ($CWD = $working_directory);
+                    $working_directory = $CWD;
+                    eval {
+                        $CWD = $directory;
+                    }
                     
-                    if($CWD eq $directory) {
-                        $output = "Working Directory : $directory\n";
-                    } else {
+                    if($@) {
                         $output = "Warning: Couldn't Move To : $directory\n";
+                        $CWD = $working_directory;
+                    } else {
+                        $output = "Working Directory : $directory\n";
                     }
                 }
                 
