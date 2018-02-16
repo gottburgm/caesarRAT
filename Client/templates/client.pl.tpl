@@ -213,8 +213,7 @@ while(1) {
                         $process->{output} = "Warning: Couldn't Move To : $directory\n";
                         $CWD = $working_directory;
                     } else {
-                        $process->{output} = "Working Directory : $directory\n";
-                        $CWD = $directory;
+                        $process->{output} = "Working Directory : $CWD\n";
                     }
                 }
                 
